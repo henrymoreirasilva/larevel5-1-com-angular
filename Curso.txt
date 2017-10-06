@@ -1,0 +1,347 @@
+AMBIENTE
+    - Gerando chave do projeto: php artisan key:generate
+    - Criar/configurar o banco de dados:
+        . Banco: codeproject_curso
+    - Alterar o namespace da aplicação: php artisan app:name CodeProject
+
+MODEL E MIGRATION
+    - Criar o model Client: php artisan make:model Client -m
+        . O -m cria a migration
+        . Editar a migration e criar as colunas da tabela:
+            $table->strig('name');
+            $table->strig('responsible');
+            $table->strig('email');
+            $table->strig('phone');
+            $table->text('address');
+            $table->text('obs');
+        . Rodar a migração: php artisan migrate
+    - Tinker: php artisan tinker
+        $client = new CodeProject\Client;
+        $client->name = 'Empresa X';
+        ....
+        $client->save();
+        $client->all();
+        $client->find(1);
+
+MASSASSIGNMET/FACTORY/SEEDER
+    - Criar no model:
+        protected $fillable = [
+            'name',
+            'responsible',
+            'email',
+            'phone',
+            'address',
+            'obs'
+        ];
+    - Editar o arquivo database\factories\ModelFactory.php:
+        . Duplicar a factory existente e ajustar para Client.
+        . Fazer um teste no tinker: factory(CodeProject\Client::class)->make();
+    - Criar a seed: php artisan make:seeder ClientTableSeeder.php
+        . Editar o método run();
+            \CodeProject\Client::truncate();
+            factory(CodeProject\Client::class, 10)->create();
+    - Editar o arquivo DatabaseSeeder.php:
+        $this->call(ClientTableSeeder::class);
+    - Executar as seeders: php artisan db:seed
+
+CONTROLLER
+    - Criar o controller: php artisan make:controller ClientController;
+        . Editar o método index():
+            return \CodeProject\Client::all();
+        . Criar a rota: Route:get('clients', 'ClientController@index');
+    - Inserindo dados;
+        . Editar o método store():
+            return CodeProject\Client::create($request->all());
+        . Criar a rota: Route:post('client', 'ClientController@store');
+        . Editar http/kernel.php:
+            . Mover a linha \CodeProject\Http\Middleware\VerifyCsrfToken para a variável $roteMiddleware:
+                'csrf' => \CodeProject\Http\Middleware\VerifyCsrfToken::class
+    - Exibindo registro:
+        . Editr o método show($id):
+            return \CodeProject\Client::find($id);
+        . Criar a rota: Route::get('client/{id}', 'ClientController@show');
+    - Excluindo registro:
+        . Editr o método destroy($id)
+            \CodeProject\Client::find($id)->delete();
+        . Criar a rota: Route::delete('client/{id}', 'ClientController@destroy');
+    - Alterando registro:
+
+REPOSITORY
+    - Instalar o prettus repository: github.prettus/l5-repository
+        composer require prettus/l5-repository
+    - Adicionar o prettus aos providers: config/app.php
+        Prettus\Repository\Providers\RepositoryServiceProvider::class
+    - Executar: php artisan vendor:publish
+    - Editar a sessão 'generator' no arquivo config/repository.php para permitir a geração de repositories pelo artisan:
+        'rootNamespace' => 'CodeProject\\'
+    - Refatorar:
+        . Criar a pasta app/Repositories
+        . Criar a pasta app/Entities e mover os models Client e User para esta pasta.
+        . Ajustar os namespaces para CodeProject\Entities (controllers, seeder, models ...)
+    - Criar o repository ClientRepositoryEloquent.php
+        . Esta classe deve extender BaseRepository
+        . Implementar um método model() que deve retornar o model (entidade) Client::class.
+    - Injetar o repository criado em ClientController e testar.
+    - Criar uma interface Repositories/ClientRepository. 
+        Extender RepositoryInterface.
+    - Ajustar ClientRepositoryEloquent para implementar ClientRepository.
+    - Em ClientController, substituir ClientRepositoryEloquent por ClientRepository.
+    - Criar o service provider: php artisan make:provider CodeProjectRepositoryProvider
+        . Editar o método register() para registrar o service:
+            $this->app->bind(
+                \CodeProject\Repositories\ClientRepository::class,
+                \CodeProject\Repositories\ClientRepositoryEloquent::class
+            );
+    - Configurar o service provider para ser carregado pelo Laravel
+        . Editar config/app.php: CodeProject\Providers\CodeProjectRepositoryProvider::class
+         
+SERVIÇOS
+    - Criar um service para cliente em Services/ClientService.php
+        . Injetar o repository.
+        . Criar os métodos create() e update().
+        . Instalar o prettus/laravel-validation: composer update prettus/laravel-validation.
+        . Criar o validador: Validators/ClientValidator.php
+        . Extender LaravelValidator.
+        . Criar o a variável $rules:
+            protected $rules = [
+                'name' => 'required|max:255',
+                'responsible' => 'required|255',
+                'email' => 'requered|email',
+                'phone' => 'required',
+                'address' => 'required'
+            ];
+    - Injetar o validator no service.
+    - Ajustar o método create();
+        try {
+            $this->validator->width($data)->passesOrFail();
+            return $this->repository->create($data);
+        } catch (ValidatorException $e) {
+            return [
+                'error' => true,
+                'message' => $e->getMessageBag()
+            ];
+        }
+    - Ajustar o método update().
+    - Atualizar o contoller:
+        . Injetar o service.
+        . Ajustar o método store()
+            $this->service->create($request->all());
+
+ENTIDADE PROJECT    
+    - Criar entity, srvice, repository e validator: php artisan make:entity Project
+    - Atualizar o repository provider.
+    - Criar a migration: php artisan make:migration create_project_tables --create=projects
+    - Criar a factory de project.
+    - Criar a seeder.
+    - Executar a seeder: php artisan migrate:refresh --seed
+    - Criar o validador e o service.
+
+PROJECTNOTE
+    - Migration: project_notes
+        . ProjectNote dever fazer referência a um projeto
+    - Criar a entidade ProjectNote.
+    - Criar factory e seeder.
+    - Dar refresh no banco.
+    - Registrar ProjecNoteRepository no provider.
+    - Criar o relacionamento na entidade ProjectNote: $this->belongsTo().
+    - Criar o relacionamento na entidade Project: $this->hasMany().
+    - Criar o validator e o service.
+    - Criar o controller para notes
+        . No método index() deve ser passado o id do projeto e o método all() deve ser trocado por findWhere().
+    - Criar rotas para index, show, create e update.
+OAUTH2
+    - Incluir no composer :
+        "minimum-stability":"dev"
+        "require" {
+            "lucadegasperi/oauth2-server-laravel": "5.0.*" 
+        }
+    - Executar: composer update lucadegasperi/oauth2-server-laravel
+    - Seguir os passos de instalação.
+    - Criar um usuário na tabela users para testar a autenticação.
+    - Testar autenticação.
+    - Refresh token.
+    - Agrupar rotas.
+        Route::group(['middleware' => 'oauth'], function(){
+            Route::resource('client', 'ClientController', ['except' => ['create', 'edit']]);
+            ...
+            ...
+        });
+
+AUTORIZAÇÃO
+    - Criar um método em ProjectRepositoryEloquent.php para verificar se um usuário é dono de um projeto:
+        . A escolha do repository se dá por ser apenas um método de consulta e não possuir transações.
+        public function isOwner($projectId, $userId) {
+            if (count($this->findwhere(['id' => $projectId, 'owner_id' => '$userId]))) {
+                return true;
+            }
+            return false;
+        }
+
+CRIANDO MIDDLEWARE
+    - Criar o midlleware:
+        . php artisan make:middleware CheckProjectOwner
+        . Injetar ProjectRepository: __contruct(ProjectRepository $projectRepository) ...
+        . Editar o método handle()
+            public function handle($request, Clousure $next) {
+                $userId = \Authorizer::getResourceOwnerId();
+                $projectId = $request->projectId;
+                
+                if ($this->repository->isOwner($projectId, $userId) == FALSE) {
+                    return ['success' => FALSE];
+                }
+
+                $return $next($request);
+            }
+    - Registrar o middlewarea em kernel.php:
+        . 'CheckProjectOwner' => \CodeProject\Http\Middleware\CheckProjectOwner::class
+    - Criar um grupo de rotas e aplicar o middleware a ele:
+        . Route::group(['middleware' => 'CheckProjectOwner'], function() { ... });
+
+VALIDANDO NO CONTROLLER (alternativa ao middleware para situações mais simples)
+    - Criar o método checkProjectOwner() em ProjectController:
+        public function checkProjectOwner($projectId) {
+            $userId = \Authorizer::getResourceOwnerId();
+            return $this->repository->isOwner($projectId, $userId);
+        }
+    - Atualizar o método show() para validar $id:
+        ....
+        if (!$this->checkProjectOwner($id)) {
+            return ['error' => 'Access forbidden!'];
+        }
+        ....
+    - Atualizar o método index():
+        return $this->repository->findWhere(['owner_id' => \Authorizer::getResourceOwnerId()]);
+
+RELACIONAN DO PROJECTMEMBERS (many to many)
+    - Criar a migration para ProjectMembers:
+        php artisan make:migration create_table_project_members --create=project_members
+    - Criar o relacionamento entre projects e users na migration:
+        $table->integer('project_id')->unsigned();
+        $table->foreign('project_id')->references('id')->on('projects');
+        $table->integer('member_id')->unsigned();
+        $table->foreign('member_id')->references('id')->on('users');
+    - Criar a entidade ProjectMember.
+        . Fillable: project_id, member_id.
+    - Criar método members() para relacionamento na entidade Project:
+        public function members() {
+            return $this->belongsToMany(Users::class, 'project_members', 'project_id', 'member_id');
+        }   
+    - Criar método projects() na entidade Users:
+        public function users() {
+            return $this->belongsToMany(Project::class, 'project_members', 'member_id', 'project_id');
+        } 
+CHECK OWNER E PERMISSIONS
+    - Criar um método em ProjectRepositoryEloquent para verificar se usuário é membro de um projeto:
+        public function hasMember($projectId, $memberId) {
+            $r = FALSE;
+
+            $project = $this->find($projectId);
+
+            foreach ($project->members as $member) {
+                if ($member->id == $memberId) {
+                    $r = TRUE;
+                    break;
+                }
+            }
+
+            return $r;
+        }
+    - Criar um método em ProjectController para fazer a chamado do método no repository:
+        public function checkProjectMember($projectId) {
+            $userId = \Authorizer::getResourceOwnerId();
+            return $this->repository->hasMember($projectId, $userId);
+        }
+    - Criar um método ainda em ProjectController para verificar se usuário é owner ou member:
+        public function checkProjectPermissions($projectId) {
+            return $this->checkProjectMember($projectId) or $this->checkProjectOwner($projectId);
+        }
+PRESENTER e TRANSFORMER
+    - Instalar a biblioteca: composer require league/fractal
+    - Criar um diretório Transformers.
+    - Criar classe ProjectTransform:
+        namespace CodeProject\Transformers;
+
+        use League\Fractal\TransformerAbstract;
+
+        class ProjectTransformer extends TransformerAbstract
+        {
+           public function transform(\CodeProject\Entities\Project $project){
+               return [
+                   'project_id' => $project->id,
+                   'project' => $project->name,
+                   'description' => $project->description,
+                   'progress' => $project->progress,
+                   'status' => $project->status,
+                   'due_date' => $project->due_date,
+               ];
+           }
+
+        }  
+    - Criar um diretório Presenters.
+    - Criar classe ProjectPresenter (liga o repository ao transformer):
+        namespace CodeProject\Presenters;
+
+        use Prettus\Repository\Presenter\FractalPresenter;
+
+        class ProjectPresenter extends FractalPresenter
+        {
+            public function getTransformer() {
+                return new \CodeProject\Transformers\ProjectTransformer;
+            }
+        }
+    - Criar o método presenter() em ProjectRepositoryEloquent:
+        public function presenter() {
+            return \CodeProject\Presenters\ProjectPresenter::class;
+        }
+    - Criar um transformer para ProjectMember:
+        namespace CodeProject\Transformers;
+
+        use League\Fractal\TransformerAbstract;
+
+        class ProjectMemberTransformer extends TransformerAbstract
+        {
+           public function transform(\CodeProject\Entities\User $member){
+               return [
+                   'member_id' => $member->id,
+
+               ];
+           }
+
+        }
+    - Criar o método includeMembers() em ProjectTransformer:
+        public function includeMembers(Project $project) {
+            return $this->collection($project->members, new ProjectMemberTransformer());
+        }
+    - Declarar a variável: protected $defalutIncludes = ['members'];
+***
+PROJECT FILE
+    - Criar a migration: php artisan make:migration create_table_project_files --create=project_files
+    - Ajustar a migration:
+        $table->string('name');
+        $table->text('description');
+        $table->string('extension');
+        $table->integer('project_id')->unsigned();
+        $table->foreign('project_id')->references('id')->on('projects');
+    - Criar a entidade ProjectFile, ajustar $fillable, criar a relação com Project (belongtsTo).
+    - Criar a relação em Project com ProjectFile (hasMany).
+    - Criar o controlle ProjectFileController.
+        . Ajustar o método store() para realizar o upload:
+            $file = $request->file('file');
+            $extension = $file->getClientOriginalExtension();
+            $data['file'] = $file;
+            $data['extension'] = $extension;
+            $data['name'] = $request->name;
+            $data['description'] = $request->description;
+            $data['project_id'] = $request->project_id;
+
+            $this->service->createFile($data);
+    
+    - Criar o método createFile() em ProjectService:
+        . Remover as facades File e Storage de ProjectService para evitar alto acoplamento (ver documentação laravel 5.1).
+        public function createFile(array $data) {
+            $project = $this->repository->skipPresenter()->find($data['project']);
+            $projectFile = $project->files()->create($data);
+
+            $this->storage->put($projectFile->id. '.'. $data['extension'], $this->fileSystem->file->get($data['file']));
+    
+    
